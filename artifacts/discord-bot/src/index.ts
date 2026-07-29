@@ -97,10 +97,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // Public confirmation with ✅ so the server sees the AFK status
+    // Public confirmation — no ping, friendly message
     const content = afkMessage
-      ? `✅ **${originalName}** is now AFK — *${afkMessage}*`
-      : `✅ **${originalName}** is now AFK.`;
+      ? `${originalName} is now afk, thank you. *(${afkMessage})*`
+      : `${originalName} is now afk, thank you.`;
 
     await interaction.reply({ content });
   }
@@ -132,10 +132,10 @@ client.on(Events.MessageCreate, async (message) => {
 
   // Welcome back — DM so only they see it; fall back to a quiet public reply
   try {
-    await message.author.send(`👋 Welcome back, **${originalName}**! Your AFK has been removed.`);
+    await message.author.send(`welcome back ${originalName} ur now off afk`);
   } catch {
     await message.reply({
-      content: `👋 Welcome back, **${originalName}**!`,
+      content: `welcome back ${originalName} ur now off afk`,
       allowedMentions: { repliedUser: false },
     });
   }
