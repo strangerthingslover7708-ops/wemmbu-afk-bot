@@ -97,12 +97,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // Public confirmation — tags the user
+    // Public confirmation — tags the user, auto-deleted after 10 seconds
     const content = afkMessage
       ? `<@${userId}> is now afk, thank you. *(${afkMessage})*`
       : `<@${userId}> is now afk, thank you.`;
 
     await interaction.reply({ content });
+    const sent = await interaction.fetchReply();
+    setTimeout(() => sent.delete().catch(() => {}), 10_000);
   }
 });
 
@@ -130,14 +132,12 @@ client.on(Events.MessageCreate, async (message) => {
     }
   }
 
-  // Welcome back — DM so only they see it; fall back to a quiet public reply
+  // Welcome back — public message tagging them, auto-deleted after 10 seconds
   try {
-    await message.author.send(`welcome back ${originalName} ur now off afk`);
+    const welcomeMsg = await message.channel.send(`welcome back <@${userId}> ur now off afk`);
+    setTimeout(() => welcomeMsg.delete().catch(() => {}), 10_000);
   } catch {
-    await message.reply({
-      content: `welcome back ${originalName} ur now off afk`,
-      allowedMentions: { repliedUser: false },
-    });
+    // Silently skip if the bot lacks permission to send/delete in this channel
   }
 });
 
