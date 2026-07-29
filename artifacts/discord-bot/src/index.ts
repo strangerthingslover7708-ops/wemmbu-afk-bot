@@ -40,26 +40,18 @@ client.on(Events.MessageCreate, async (message) => {
       return;
     }
 
-    // Always react with a checkmark, regardless of role
+    // Always react with a checkmark
     await message.react("✅");
 
     const originalName = member.nickname ?? message.author.username;
     afkUsers.set(userId, originalName);
 
-    const isOwner = message.guild.ownerId === userId;
-
-    if (isOwner) {
-      // Server owner: skip nickname change to avoid permission error
-      await message.reply(`You are now AFK, **${originalName}**. (Nickname change skipped — server owners cannot have their nickname changed by bots.)`);
-    } else {
-      try {
-        await member.setNickname(`[AFK] ${originalName}`);
-        await message.reply(`You are now AFK, **${originalName}**. Your nickname has been updated.`);
-      } catch {
-        await message.reply(
-          `You are now AFK, **${originalName}**. (Could not update your nickname — make sure the bot has the **Manage Nicknames** permission and that your role is below the bot's role.)`
-        );
-      }
+    try {
+      await member.setNickname(`[AFK] ${originalName}`);
+      await message.reply(`You are now AFK, **${originalName}**. Your nickname has been updated.`);
+    } catch {
+      // Nickname change blocked (e.g. server owner, missing permissions) — bot stays running
+      await message.reply(`You are now AFK, **${originalName}**.`);
     }
     return;
   }
