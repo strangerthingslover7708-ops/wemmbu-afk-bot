@@ -160,11 +160,16 @@ client.on(Events.MessageCreate, async (message) => {
   }
 
   // Welcome back — public message tagging them, auto-deleted after 10 seconds
+  // Falls back to a DM if the bot lacks Send Messages permission in the channel
   try {
     const welcomeMsg = await message.channel.send(`welcome back <@${userId}> ur now off afk`);
-    setTimeout(() => welcomeMsg.delete().catch((err) => console.error("Failed to delete welcome msg:", err)), 10_000);
-  } catch (err) {
-    console.error("Failed to send welcome back message:", err);
+    setTimeout(() => welcomeMsg.delete().catch(() => {}), 10_000);
+  } catch {
+    try {
+      await message.author.send(`welcome back ${originalName} ur now off afk`);
+    } catch {
+      // DMs also closed — nothing we can do
+    }
   }
 });
 
