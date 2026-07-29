@@ -125,50 +125,78 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// ── Restore on next message ───────────────────────────────────────────────────
+// ── Message Listener (Restore & Ping handling) ───────────────────────────────
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
-  if (!message.guild || !message.member) return;
+  if (!message.guild) return;
 
-  const userId = message.author.id;
-  const isOwner = message.guild.ownerId === userId;
+  // 1. CHECK IF THE AUTHOR OF THE MESSAGE IS AFK (RESTORE THEM)
+  if (message.member && afkUsers.has(message.author.id)) {
+    const userId = message.author.id;
+    const isOwner = message.guild.ownerId === userId;
+    const { originalName } = afkUsers.get(userId)!;
 
-  if (!afkUsers.has(userId)) return;
+    afkUsers.delete(userId);
 
-  const { originalName } = afkUsers.get(userId)!;
-  afkUsers.delete(userId);
-
-  // Restore nickname
-  if (!isOwner) {
-    try {
-      await message.member.setNickname(
-        originalName === message.author.username ? null : originalName
-      );
-    } catch {
-      // Silently skip
+    // Restore nickname
+    if (!isOwner) {
+      try {
+        await message.member.setNickname(
+          originalName === message.author.username ? null : originalName
+        );
+      } catch {
+        // Silently skip
+      }
     }
+
+    // Remove the AFK role if it exists
+    const afkRole = message.guild.roles.cache.find((r) => r.name === "AFK");
+    if (afkRole) {
+      try {
+        await message.member.roles.remove(afkRole);
+      } catch (err) {
+        console.error("Failed to remove AFK role:", err);
+      }
+    }
+
+    // Welcome back — public message tagging them, auto-deleted after 10 seconds
+    try {
+      const welcomeMsg = await message.channel.send(`welcome back <@${userId}> ur now off afk`);
+      setTimeout(() => welcomeMsg.delete().catch(() => {}), 10_000);
+    } catch {
+      try {
+        await message.author.send(`welcome back ${originalName} ur now off afk`);
+      } catch {
+        // DMs also closed
+      }
+    }
+
+    // Stop here so we don't trigger ping replies for this message
+    return;
   }
 
-  // Remove the AFK role if it exists
-  const afkRole = message.guild.roles.cache.find((r) => r.name === "AFK");
-  if (afkRole) {
-    try {
-      await message.member.roles.remove(afkRole);
-    } catch (err) {
-      console.error("Failed to remove AFK role:", err);
-    }
-  }
+  // 2. CHECK IF ANYONE MENTIONED/PINGED AN AFK USER
+  if (message.mentions.users.size > 0) {
+    for (const [mentionedId, user] of message.mentions.users) {
+      // Don't reply if they pinged themselves or a bot
+      if (mentionedId === message.author.id || user.bot) continue;
 
-  // Welcome back — public message tagging them, auto-deleted after 10 seconds
-  // Falls back to a DM if the bot lacks Send Messages permission in the channel
-  try {
-    const welcomeMsg = await message.channel.send(`welcome back <@${userId}> ur now off afk`);
-    setTimeout(() => welcomeMsg.delete().catch(() => {}), 10_000);
-  } catch {
-    try {
-      await message.author.send(`welcome back ${originalName} ur now off afk`);
-    } catch {
-      // DMs also closed — nothing we can do
+      if (afkUsers.has(mentionedId)) {
+        const data = afkUsers.get(mentionedId)!;
+
+        let response = `<@${mentionedId}> is currently AFK.`;
+        if (data.afkMessage) {
+          response += ` Reason: *${data.afkMessage}*`;
+        }
+
+        try {
+          const replyMsg = await message.reply({ content: response });
+          // Auto-delete the notification after 15 seconds to avoid spam
+          setTimeout(() => replyMsg.delete().catch(() => {}), 15_000);
+        } catch {
+          // Lacks permissions to reply/send in this channel
+        }
+      }
     }
   }
 });
