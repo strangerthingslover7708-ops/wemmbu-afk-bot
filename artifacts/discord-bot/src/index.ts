@@ -104,6 +104,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
+    // Assign the AFK role if it exists
+    const afkRole = interaction.guild.roles.cache.find((r) => r.name === "AFK");
+    if (afkRole) {
+      try {
+        await member.roles.add(afkRole);
+      } catch {
+        // Silently skip if bot lacks Manage Roles permission
+      }
+    }
+
     // Public confirmation — tags the user, auto-deleted after 10 seconds
     const content = afkMessage
       ? `<@${userId}> is now afk, thank you. *(${afkMessage})*`
@@ -136,6 +146,16 @@ client.on(Events.MessageCreate, async (message) => {
       );
     } catch {
       // Silently skip
+    }
+  }
+
+  // Remove the AFK role if it exists
+  const afkRole = message.guild.roles.cache.find((r) => r.name === "AFK");
+  if (afkRole) {
+    try {
+      await message.member.roles.remove(afkRole);
+    } catch {
+      // Silently skip if bot lacks Manage Roles permission
     }
   }
 
