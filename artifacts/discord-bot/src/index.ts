@@ -24,49 +24,65 @@ client.once(Events.ClientReady, (readyClient) => {
 });
 
 client.on(Events.MessageCreate, async (message) => {
-  // Ignore bots
+  // Ignore bots and DMs
   if (message.author.bot) return;
-  // Only works in servers (not DMs)
   if (!message.guild || !message.member) return;
 
   const member = message.member;
   const userId = message.author.id;
+  const isOwner = message.guild.ownerId === userId;
 
-  // --- !afk command ---
+  // ── !afk command ────────────────────────────────────────────────────────────
   if (message.content.trim().toLowerCase() === "!afk") {
-    // Avoid double-AFK
     if (afkUsers.has(userId)) {
-      await message.reply("You are already AFK.");
+      await message.reply({ content: "You are already AFK.", allowedMentions: { repliedUser: false } });
       return;
     }
 
-    // Always react with a checkmark
+    // React with ✅ for everyone
     await message.react("✅");
 
     const originalName = member.nickname ?? message.author.username;
     afkUsers.set(userId, originalName);
 
-    try {
-      await member.setNickname(`[AFK] ${originalName}`);
-      await message.reply(`You are now AFK, **${originalName}**. Your nickname has been updated.`);
-    } catch {
-      // Nickname change blocked (e.g. server owner, missing permissions) — bot stays running
-      await message.reply(`You are now AFK, **${originalName}**.`);
+    if (!isOwner) {
+      try {
+        await member.setNickname(`[AFK] ${originalName}`);
+      } catch {
+        // Silently skip if nickname change is blocked
+      }
     }
+
     return;
   }
 
-  // --- Auto-restore on any other message while AFK ---
+  // ── Restore on next message ──────────────────────────────────────────────────
   if (afkUsers.has(userId)) {
     const originalName = afkUsers.get(userId)!;
     afkUsers.delete(userId);
 
+    if (!isOwner) {
+      try {
+        // Passing null clears the nickname back to their username
+        await member.setNickname(
+          originalName === message.author.username ? null : originalName
+        );
+      } catch {
+        // Silently skip if nickname change is blocked
+      }
+    }
+
+    // Send a welcome-back DM — only visible to them
     try {
-      // Restore to original nickname (null clears the nickname, reverting to username)
-      await member.setNickname(originalName === message.author.username ? null : originalName);
-      await message.reply(`Welcome back, **${originalName}**! Your AFK status has been removed.`);
+      await message.author.send(
+        `👋 Welcome back, **${originalName}**! Your AFK status has been removed.`
+      );
     } catch {
-      await message.reply(`Welcome back, **${originalName}**! (Could not restore your nickname — check bot permissions.)`);
+      // DMs may be disabled — fall back to a brief public reply
+      await message.reply({
+        content: `👋 Welcome back, **${originalName}**!`,
+        allowedMentions: { repliedUser: false },
+      });
     }
   }
 });
