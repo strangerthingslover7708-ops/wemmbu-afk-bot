@@ -154,17 +154,17 @@ client.on(Events.MessageCreate, async (message) => {
   if (afkRole) {
     try {
       await message.member.roles.remove(afkRole);
-    } catch {
-      // Silently skip if bot lacks Manage Roles permission
+    } catch (err) {
+      console.error("Failed to remove AFK role:", err);
     }
   }
 
   // Welcome back — public message tagging them, auto-deleted after 10 seconds
   try {
     const welcomeMsg = await message.channel.send(`welcome back <@${userId}> ur now off afk`);
-    setTimeout(() => welcomeMsg.delete().catch(() => {}), 10_000);
-  } catch {
-    // Silently skip if the bot lacks permission to send/delete in this channel
+    setTimeout(() => welcomeMsg.delete().catch((err) => console.error("Failed to delete welcome msg:", err)), 10_000);
+  } catch (err) {
+    console.error("Failed to send welcome back message:", err);
   }
 });
 
