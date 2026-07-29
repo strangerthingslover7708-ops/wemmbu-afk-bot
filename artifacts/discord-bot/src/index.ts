@@ -51,15 +51,17 @@ const command = new SlashCommandBuilder()
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`✅ Logged in as ${readyClient.user.tag}`);
 
-  // Register slash commands globally
+  // Register slash commands per-guild (instant, no propagation delay)
   const rest = new REST().setToken(token!);
-  try {
-    await rest.put(Routes.applicationCommands(readyClient.user.id), {
-      body: [command.toJSON()],
-    });
-    console.log("✅ Slash commands registered globally.");
-  } catch (err) {
-    console.error("Failed to register slash commands:", err);
+  for (const guild of readyClient.guilds.cache.values()) {
+    try {
+      await rest.put(Routes.applicationGuildCommands(readyClient.user.id, guild.id), {
+        body: [command.toJSON()],
+      });
+      console.log(`✅ Slash commands registered in guild: ${guild.name}`);
+    } catch (err) {
+      console.error(`Failed to register commands in guild ${guild.name}:`, err);
+    }
   }
 });
 
