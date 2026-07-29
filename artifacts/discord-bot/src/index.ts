@@ -97,10 +97,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // Public confirmation — no ping, friendly message
+    // Public confirmation — tags the user
     const content = afkMessage
-      ? `${originalName} is now afk, thank you. *(${afkMessage})*`
-      : `${originalName} is now afk, thank you.`;
+      ? `<@${userId}> is now afk, thank you. *(${afkMessage})*`
+      : `<@${userId}> is now afk, thank you.`;
 
     await interaction.reply({ content });
   }
