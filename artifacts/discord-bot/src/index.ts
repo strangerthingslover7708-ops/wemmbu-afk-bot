@@ -1,5 +1,12 @@
 import "dotenv/config";
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import {
+  Client,
+  Events,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+} from "discord.js";
 
 const token = process.env.DISCORD_BOT_TOKEN;
 
@@ -16,74 +23,121 @@ const client = new Client({
   ],
 });
 
-// Map of userId -> original display name (before AFK was set)
-const afkUsers = new Map<string, string>();
+// Map of userId -> { originalName, afkMessage? }
+const afkUsers = new Map<string, { originalName: string; afkMessage?: string }>();
 
-client.once(Events.ClientReady, (readyClient) => {
+// /wemmbu afk set [message]
+const command = new SlashCommandBuilder()
+  .setName("wemmbu")
+  .setDescription("Wemmbu bot commands")
+  .addSubcommandGroup((group) =>
+    group
+      .setName("afk")
+      .setDescription("AFK commands")
+      .addSubcommand((sub) =>
+        sub
+          .setName("set")
+          .setDescription("Mark yourself as AFK")
+          .addStringOption((opt) =>
+            opt
+              .setName("message")
+              .setDescription("Optional message to show while you're AFK")
+              .setRequired(false)
+          )
+      )
+  );
+
+// ── Ready ────────────────────────────────────────────────────────────────────
+client.once(Events.ClientReady, async (readyClient) => {
   console.log(`✅ Logged in as ${readyClient.user.tag}`);
+
+  // Register slash commands globally
+  const rest = new REST().setToken(token!);
+  try {
+    await rest.put(Routes.applicationCommands(readyClient.user.id), {
+      body: [command.toJSON()],
+    });
+    console.log("✅ Slash commands registered globally.");
+  } catch (err) {
+    console.error("Failed to register slash commands:", err);
+  }
 });
 
-client.on(Events.MessageCreate, async (message) => {
-  // Ignore bots and DMs
-  if (message.author.bot) return;
-  if (!message.guild || !message.member) return;
+// ── /wemmbu afk set ───────────────────────────────────────────────────────────
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.guild) return;
 
-  const member = message.member;
-  const userId = message.author.id;
-  const isOwner = message.guild.ownerId === userId;
+  if (
+    interaction.commandName === "wemmbu" &&
+    interaction.options.getSubcommandGroup() === "afk" &&
+    interaction.options.getSubcommand() === "set"
+  ) {
+    const userId = interaction.user.id;
+    const isOwner = interaction.guild.ownerId === userId;
+    const afkMessage = interaction.options.getString("message") ?? undefined;
 
-  // ── !afk command ────────────────────────────────────────────────────────────
-  if (message.content.trim().toLowerCase() === "!afk") {
     if (afkUsers.has(userId)) {
-      await message.reply({ content: "You are already AFK.", allowedMentions: { repliedUser: false } });
+      await interaction.reply({ content: "You are already AFK.", ephemeral: true });
       return;
     }
 
-    // React with ✅ for everyone
-    await message.react("✅");
+    // Fetch member so we have the latest nickname
+    const member = await interaction.guild.members.fetch(userId);
+    const originalName = member.nickname ?? interaction.user.username;
 
-    const originalName = member.nickname ?? message.author.username;
-    afkUsers.set(userId, originalName);
+    afkUsers.set(userId, { originalName, afkMessage });
 
+    // Change nickname for everyone except the server owner
     if (!isOwner) {
       try {
         await member.setNickname(`[AFK] ${originalName}`);
       } catch {
-        // Silently skip if nickname change is blocked
+        // Silently skip if blocked by permissions / role hierarchy
       }
     }
 
-    return;
+    // Public confirmation with ✅ so the server sees the AFK status
+    const content = afkMessage
+      ? `✅ **${originalName}** is now AFK — *${afkMessage}*`
+      : `✅ **${originalName}** is now AFK.`;
+
+    await interaction.reply({ content });
   }
+});
 
-  // ── Restore on next message ──────────────────────────────────────────────────
-  if (afkUsers.has(userId)) {
-    const originalName = afkUsers.get(userId)!;
-    afkUsers.delete(userId);
+// ── Restore on next message ───────────────────────────────────────────────────
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot) return;
+  if (!message.guild || !message.member) return;
 
-    if (!isOwner) {
-      try {
-        // Passing null clears the nickname back to their username
-        await member.setNickname(
-          originalName === message.author.username ? null : originalName
-        );
-      } catch {
-        // Silently skip if nickname change is blocked
-      }
-    }
+  const userId = message.author.id;
+  const isOwner = message.guild.ownerId === userId;
 
-    // Send a welcome-back DM — only visible to them
+  if (!afkUsers.has(userId)) return;
+
+  const { originalName } = afkUsers.get(userId)!;
+  afkUsers.delete(userId);
+
+  // Restore nickname
+  if (!isOwner) {
     try {
-      await message.author.send(
-        `👋 Welcome back, **${originalName}**! Your AFK status has been removed.`
+      await message.member.setNickname(
+        originalName === message.author.username ? null : originalName
       );
     } catch {
-      // DMs may be disabled — fall back to a brief public reply
-      await message.reply({
-        content: `👋 Welcome back, **${originalName}**!`,
-        allowedMentions: { repliedUser: false },
-      });
+      // Silently skip
     }
+  }
+
+  // Welcome back — DM so only they see it; fall back to a quiet public reply
+  try {
+    await message.author.send(`👋 Welcome back, **${originalName}**! Your AFK has been removed.`);
+  } catch {
+    await message.reply({
+      content: `👋 Welcome back, **${originalName}**!`,
+      allowedMentions: { repliedUser: false },
+    });
   }
 });
 
