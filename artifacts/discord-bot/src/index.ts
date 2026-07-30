@@ -89,9 +89,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // Fetch member so we have the latest nickname
+    // Fetch member so we have the latest data
     const member = await interaction.guild.members.fetch(userId);
-    const originalName = member.nickname ?? interaction.user.username;
+    
+    // PÅ PRICKEN FIXAT: Hämtar ditt riktiga VISNINGSNAMN (Display Name) istället för användarnamn!
+    const originalName = member.displayName;
 
     afkUsers.set(userId, { originalName, afkMessage });
 
@@ -104,8 +106,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // FIXED: Letar nu efter din exakta snygga AFK-roll!
-    const afkRole = interaction.guild.roles.cache.find((r) => r.name === "꧁𓊈𒆜A F K𒆜𓊉꧂");
+    // Letar efter din exakta snygga AFK-roll!
+    const afkRole = message.guild.roles.cache.find((r) => r.name === "꧁𓊈𒆜A F K𒆜𓊉꧂");
     if (afkRole) {
       try {
         await member.roles.add(afkRole);
@@ -114,7 +116,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // Fixed formatting: No parentheses and no asterisks
+    // Format: No parentheses and no asterisks
     const content = afkMessage
       ? `<@${userId}> is now afk, thank you: ${afkMessage}.`
       : `<@${userId}> is now afk, thank you.`;
@@ -157,7 +159,7 @@ client.on(Events.MessageCreate, async (message) => {
   const userData = afkUsers.get(userId);
   afkUsers.delete(userId); // Instantly remove from database tracking map
 
-  // STEP A: FIXED - Tar bort din exakta snygga AFK-roll när du skriver!
+  // STEP A: Tar bort din exakta snygga AFK-roll när du skriver!
   const afkRole = message.guild.roles.cache.find((r) => r.name === "꧁𓊈𒆜A F K𒆜𓊉꧂");
   if (afkRole) {
     try {
