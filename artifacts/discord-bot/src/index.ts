@@ -55,7 +55,7 @@ client.once(Events.ClientReady, async (readyClient) => {
 
   // Clear any lingering global commands
   await rest.put(Routes.applicationCommands(readyClient.user.id), { body: [] });
-  console.log("🧹 Cleared global slash commands.");
+  console.log("Completely cleared global slash commands.");
 
   // Register per-guild (instant, no propagation delay)
   for (const guild of readyClient.guilds.cache.values()) {
@@ -114,9 +114,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // Public confirmation — tags the user, auto-deleted after 10 seconds
+    // FIXED: Exact formatting without parentheses and asterisks on the dot!
     const content = afkMessage
-      ? `<@${userId}> is now afk, thank you. *(${afkMessage})*`
+      ? `<@${userId}> is now afk, thank you: ${afkMessage}.`
       : `<@${userId}> is now afk, thank you.`;
 
     await interaction.reply({ content });
@@ -130,60 +130,64 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
   if (!message.guild || !message.member) return;
 
+  const userId = message.author.id;
+  const isOwner = message.guild.ownerId === userId;
+
   // 1. Check if the message tags/pings anyone who is currently AFK
   if (message.mentions.users.size > 0) {
     message.mentions.users.forEach((mentionedUser) => {
       // Don't auto-reply if a user accidentally tags themselves
-      if (mentionedUser.id === message.author.id) return;
+      if (mentionedUser.id === userId) return;
 
       if (afkUsers.has(mentionedUser.id)) {
         const userData = afkUsers.get(mentionedUser.id);
-        // Use custom message if they set one, otherwise fallback to standard text
-        const responseMessage = userData?.afkMessage || "this user is afk";
+        
+        // Keeps parentheses layout when SOMEONE ELSE tags you, as previously requested
+        const responseMessage = userData?.afkMessage 
+          ? `this user is afk (${userData.afkMessage})` 
+          : "this user is afk";
+
         message.reply(responseMessage).catch(() => {});
       }
     });
   }
 
   // 2. Check if the sender themselves is returning from being AFK
-  const userId = message.author.id;
-  const isOwner = message.guild.ownerId === userId;
-
   if (!afkUsers.has(userId)) return;
 
-  const { originalName } = afkUsers.get(userId)!;
-  afkUsers.delete(userId);
+  const userData = afkUsers.get(userId);
+  afkUsers.delete(userId); // Instantly remove from database tracking map
 
-  // Restore nickname
-  if (!isOwner) {
-    try {
-      await message.member.setNickname(
-        originalName === message.author.username ? null : originalName
-      );
-    } catch {
-      // Silently skip
-    }
-  }
-
-  // Remove the AFK role if it exists
+  // STEP A: Remove the AFK role immediately (Works perfectly for Server Owner!)
   const afkRole = message.guild.roles.cache.find((r) => r.name === "AFK");
   if (afkRole) {
     try {
       await message.member.roles.remove(afkRole);
-    } catch {
-      // Silently skip
+    } catch (err) {
+      console.error("Failed to remove role automatically:", err);
     }
   }
 
-  // Welcome back — public message tagging them, auto-deleted after 10 seconds
+  // STEP B: Send the Welcome Back chat message right away
   try {
     const welcomeMsg = await message.channel.send(`welcome back <@${userId}> ur now off afk`);
     setTimeout(() => welcomeMsg.delete().catch(() => {}), 10_000);
   } catch {
     try {
-      await message.author.send(`welcome back ${originalName} ur now off afk`);
+      if (userData) {
+        await message.author.send(`welcome back ${userData.originalName} ur now off afk`);
+      }
+    } catch {}
+  }
+
+  // STEP C: Try to change nickname last (Safely isolated to protect server owners)
+  if (!isOwner && userData) {
+    try {
+      await message.member.setNickname(
+        userData.originalName === message.author.username ? null : userData.originalName
+      );
     } catch {
-      // DMs also closed
+      // Silently catch role hierarchy permission blockages
     }
   }
 });
