@@ -104,17 +104,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // Assign the AFK role if it exists
-    const afkRole = interaction.guild.roles.cache.find((r) => r.name === "AFK");
+    // FIXED: Letar nu efter din exakta snygga AFK-roll!
+    const afkRole = interaction.guild.roles.cache.find((r) => r.name === "꧁𓊈𒆜A F K𒆜𓊉꧂");
     if (afkRole) {
       try {
         await member.roles.add(afkRole);
-      } catch {
-        // Silently skip if bot lacks Manage Roles permission
+      } catch (err) {
+        console.error("Kunde inte lägga till rollen: Kolla så botens roll ligger högre upp än AFK-rollen!", err);
       }
     }
 
-    // FIXED: Exact formatting without parentheses and asterisks on the dot!
+    // Fixed formatting: No parentheses and no asterisks
     const content = afkMessage
       ? `<@${userId}> is now afk, thank you: ${afkMessage}.`
       : `<@${userId}> is now afk, thank you.`;
@@ -142,7 +142,6 @@ client.on(Events.MessageCreate, async (message) => {
       if (afkUsers.has(mentionedUser.id)) {
         const userData = afkUsers.get(mentionedUser.id);
         
-        // Keeps parentheses layout when SOMEONE ELSE tags you, as previously requested
         const responseMessage = userData?.afkMessage 
           ? `this user is afk (${userData.afkMessage})` 
           : "this user is afk";
@@ -158,8 +157,8 @@ client.on(Events.MessageCreate, async (message) => {
   const userData = afkUsers.get(userId);
   afkUsers.delete(userId); // Instantly remove from database tracking map
 
-  // STEP A: Remove the AFK role immediately (Works perfectly for Server Owner!)
-  const afkRole = message.guild.roles.cache.find((r) => r.name === "AFK");
+  // STEP A: FIXED - Tar bort din exakta snygga AFK-roll när du skriver!
+  const afkRole = message.guild.roles.cache.find((r) => r.name === "꧁𓊈𒆜A F K𒆜𓊉꧂");
   if (afkRole) {
     try {
       await message.member.roles.remove(afkRole);
