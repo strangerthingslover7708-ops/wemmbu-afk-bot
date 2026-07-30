@@ -125,11 +125,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// ── Restore on next message ───────────────────────────────────────────────────
+// ── Handle Mentions & Restore on next message ─────────────────────────────────
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
   if (!message.guild || !message.member) return;
 
+  // 1. Check if the message tags/pings anyone who is currently AFK
+  if (message.mentions.users.size > 0) {
+    message.mentions.users.forEach((mentionedUser) => {
+      // Don't auto-reply if a user accidentally tags themselves
+      if (mentionedUser.id === message.author.id) return;
+
+      if (afkUsers.has(mentionedUser.id)) {
+        const userData = afkUsers.get(mentionedUser.id);
+        // Use custom message if they set one, otherwise fallback to standard text
+        const responseMessage = userData?.afkMessage || "this user is afk";
+        message.reply(responseMessage).catch(() => {});
+      }
+    });
+  }
+
+  // 2. Check if the sender themselves is returning from being AFK
   const userId = message.author.id;
   const isOwner = message.guild.ownerId === userId;
 
@@ -160,7 +176,6 @@ client.on(Events.MessageCreate, async (message) => {
   }
 
   // Welcome back — public message tagging them, auto-deleted after 10 seconds
-  // Falls back to a DM if the bot lacks Send Messages permission in the channel
   try {
     const welcomeMsg = await message.channel.send(`welcome back <@${userId}> ur now off afk`);
     setTimeout(() => welcomeMsg.delete().catch(() => {}), 10_000);
@@ -168,7 +183,7 @@ client.on(Events.MessageCreate, async (message) => {
     try {
       await message.author.send(`welcome back ${originalName} ur now off afk`);
     } catch {
-      // DMs also closed — nothing we can do
+      // DMs also closed
     }
   }
 });
